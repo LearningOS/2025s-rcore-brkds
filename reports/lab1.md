@@ -1,31 +1,35 @@
 # Lab 1 Report
 
 ## Table of Contents
-1. [Introduction](#introduction)
-2. [Objectives](#objectives)
-3. [Methodology](#methodology)
-4. [Results](#results)
-5. [Discussion](#discussion)
-6. [Conclusion](#conclusion)
-7. [References](#references)
+1. [简要介绍](#简要介绍)
+2. [题目问答](#题目问答)
+3. [荣誉准则](#methodology)
+## 简要介绍
+把记录系统调用的次数的东西放在task对应的结构体里面，对于传来的参数，使用裸指针的方式赋值访问，最后实现trace
 
-## Introduction
-Provide an overview of the lab and its purpose.
+## 题目问答
+1. [第1问](#第1问)
+2. [第2问](#第2问)
+3. [第3问](#第3问)
+4. [第4问](#第4问)
+5. [第5问](#第5问)
+6. [第6问](#第6问)
 
-## Objectives
-List the goals and objectives of the lab.
 
-## Methodology
-Describe the steps and methods used during the lab.
+## 荣誉准则
+在完成本次实验的过程（含此前学习的过程）中，我曾分别与 以下各位 就（与本次实验相关的）以下方面做过交流，还在代码中对应的位置以注释形式记录了具体的交流对象及内容：
 
-## Results
-Present the findings or data collected during the lab.
+无
 
-## Discussion
-Analyze the results and discuss their implications.
+此外，我也参考了 以下资料 ，还在代码中对应的位置以注释形式记录了具体的参考来源及内容：
 
-## Conclusion
-Summarize the key takeaways from the lab.
+无
 
-## References   
-List any references or resources used.
+3. 我独立完成了本次实验除以上方面之外的所有工作，包括代码与文档。 我清楚地知道，从以上方面获得的信息在一定程度上降低了实验难度，可能会影响起评分。
+
+4. 我从未使用过他人的代码，不管是原封不动地复制，还是经过了某些等价转换。 我未曾也不会向他人（含此后各届同学）复制或公开我的实验代码，我有义务妥善保管好它们。 我提交至本实验的评测系统的代码，均无意于破坏或妨碍任何计算机系统的正常运转。 我清楚地知道，以上情况均为本课程纪律所禁止，若违反，对应的实验成绩将按“-100”分计。
+
+5. 我使用AI问答的方式可能间接获取了一些资料，但AI只是辅助的。
+
+
+
