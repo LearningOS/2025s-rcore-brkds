@@ -103,6 +103,7 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
         inner.tasks[current].task_status = TaskStatus::Exited;
+        inner.tasks[current].task_syscall_counts.fill(0);
     }
 
     /// Find next task to run and return task id.
@@ -170,3 +171,13 @@ pub fn exit_current_and_run_next() {
     mark_current_exited();
     run_next_task();
 }
+
+/// Get the current task id
+pub fn get_task_id() -> usize {
+    TASK_MANAGER.inner.exclusive_access().current_task
+}
+/// Get the current task syscall_counts
+pub fn get_task_syscall_counts() -> * mut [usize;5]{
+    let current = get_task_id();
+    & mut TASK_MANAGER.inner.exclusive_access().tasks[current].task_syscall_counts as * mut [usize;5]
+} 
