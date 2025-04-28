@@ -61,18 +61,31 @@ pub fn trap_handler() -> ! {
     let scause = scause::read(); // get trap cause
     let stval = stval::read(); // get extra value
     // trace!("into {:?}", scause.cause());
-    match scause.cause() {
+    let trap = scause.cause();
+    match trap {
         Trap::Exception(Exception::UserEnvCall) => {
             // jump to next instruction anyway
             cx.sepc += 4;
             // get system call return value
             cx.x[10] = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize;
         }
-        Trap::Exception(Exception::StoreFault)
-        | Trap::Exception(Exception::StorePageFault)
-        | Trap::Exception(Exception::LoadFault)
-        | Trap::Exception(Exception::LoadPageFault) => {
-            println!("[kernel] PageFault in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.", stval, cx.sepc);
+        Trap::Exception(
+            Exception::StoreFault |
+            Exception::StorePageFault |
+            Exception::LoadFault |
+            Exception::LoadPageFault
+        ) => {
+            let trap_type = match trap {
+                Trap::Exception(Exception::StoreFault) => "Store Fault",
+                Trap::Exception(Exception::StorePageFault) => "Store Page Fault",
+                Trap::Exception(Exception::LoadFault) => "Load Fault",
+                Trap::Exception(Exception::LoadPageFault) => "Load Page Fault",
+                _ => unreachable!(),
+            };
+            println!(
+                "[kernel] {} in application, bad addr = {:#x}, bad instruction = {:#x}",
+                trap_type, stval, cx.sepc
+            );
             exit_current_and_run_next();
         }
         Trap::Exception(Exception::IllegalInstruction) => {

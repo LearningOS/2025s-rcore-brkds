@@ -35,7 +35,7 @@ lazy_static! {
 }
 /// address space
 pub struct MemorySet {
-    page_table: PageTable,
+    pub page_table: PageTable,
     areas: Vec<MapArea>,
 }
 
@@ -50,6 +50,10 @@ impl MemorySet {
     /// Get the page table token
     pub fn token(&self) -> usize {
         self.page_table.token()
+    }
+    /// Get the root page table
+    pub fn root_ppn(&self) -> PhysPageNum {
+        self.page_table.root_ppn()
     }
     /// Assume that no conflicts.
     pub fn insert_framed_area(

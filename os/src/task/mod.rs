@@ -202,3 +202,13 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
 }
+
+///Get the current 'Running' task's id
+pub fn current_task_id() -> usize {
+    TASK_MANAGER.inner.exclusive_access().current_task
+}
+
+/// Get the current 'Running' task's pagetable
+pub fn current_pagetable() -> usize {
+    TASK_MANAGER.inner.exclusive_access().tasks[current_task_id()].get_pagetable()
+}

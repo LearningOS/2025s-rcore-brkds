@@ -1,6 +1,7 @@
 //! Process management syscalls
-use crate::task::{change_program_brk, exit_current_and_run_next, suspend_current_and_run_next};
-
+use crate::config::PAGE_SIZE;
+use crate::task::{change_program_brk, exit_current_and_run_next, suspend_current_and_run_next,current_task_id,current_pagetable};
+use crate::mm::{VirtAddr,frame_alloc,StepByOne,PTEFlags};
 #[repr(C)]
 #[derive(Debug)]
 pub struct TimeVal {
@@ -40,12 +41,45 @@ pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
 // YOUR JOB: Implement mmap.
 pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
     trace!("kernel: sys_mmap NOT IMPLEMENTED YET!");
-    -1
+    print!("mmap\n");
+    let mut pt = current_pagetable();
+    println!("pt is {:?}, current_task_id is {} ,_port is {}\n",pt.root_ppn(),current_task_id(),_port);
+    let mut start = VirtAddr(_start).floor();
+    if _len == 0 {
+        return -1;
+    }
+    let end = (_start+_len-1)/PAGE_SIZE+1;
+    let len:usize = end-_start/PAGE_SIZE;
+    for _i in 0..len {
+        let ft = frame_alloc().unwrap();
+        let ppn = ft.ppn;
+        pt.map(start, ppn, PTEFlags::from_bits((_port<<1) as u8 ).unwrap()|PTEFlags::U);
+        println!("start is {:?}, ft is {:?}",start,ft);
+        start.step();
+    }
+    0
 }
 
 // YOUR JOB: Implement munmap.
 pub fn sys_munmap(_start: usize, _len: usize) -> isize {
     trace!("kernel: sys_munmap NOT IMPLEMENTED YET!");
+    // print!("munmap\n");
+    // let mut pt = PageTable::from_token(current_user_token());
+    // println!("pt is {:?}, current_task_id is {} ,_port is {}\n",pt.root_ppn(),current_task_id(),_port);
+    // let mut start = VirtAddr(_start).floor();
+    // if _len == 0 {
+    //     return -1;
+    // }
+    // let end = (_start+_len-1)/PAGE_SIZE+1;
+    // let len:usize = end-_start/PAGE_SIZE;
+    // for _i in 0..len {
+    //     let ft = frame_alloc().unwrap();
+    //     let ppn = ft.ppn;
+    //     pt.map(start, ppn, PTEFlags::from_bits((_port<<1) as u8 ).unwrap()|PTEFlags::U);
+    //     println!("start is {:?}, ft is {:?}",start,ft);
+    //     start.step();
+    // }
+    // 0
     -1
 }
 /// change data segment size

@@ -77,7 +77,11 @@ pub struct PageTable {
     root_ppn: PhysPageNum,
     frames: Vec<FrameTracker>,
 }
-
+// impl Drop for PageTable {
+//     fn drop(&mut self) {
+//         println!("[PageTable] Dropping, frames.len() = {:?}", self.frames);
+//     }
+// }
 /// Assume that it won't oom when creating/mapping.
 impl PageTable {
     /// Create a new page table
@@ -137,8 +141,10 @@ impl PageTable {
     #[allow(unused)]
     pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) {
         let pte = self.find_pte_create(vpn).unwrap();
+         println!("PTE before mapping (VPN: {:?}): {:?}", vpn, (*pte).flags());
         assert!(!pte.is_valid(), "vpn {:?} is mapped before mapping", vpn);
         *pte = PageTableEntry::new(ppn, flags | PTEFlags::V);
+         println!("PTE after mapping (VPN: {:?}): {:?}", vpn, (*pte).flags());
     }
     /// remove the map between virtual page number and physical page number
     #[allow(unused)]
@@ -154,6 +160,10 @@ impl PageTable {
     /// get the token from the page table
     pub fn token(&self) -> usize {
         8usize << 60 | self.root_ppn.0
+    }
+    /// get the root physical page number from the page table
+    pub fn root_ppn(&self) -> PhysPageNum {
+        self.root_ppn
     }
 }
 

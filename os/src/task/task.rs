@@ -1,4 +1,6 @@
 //! Types related to task management
+use riscv::paging::PageTable;
+
 use super::TaskContext;
 use crate::config::TRAP_CONTEXT_BASE;
 use crate::mm::{
@@ -38,6 +40,11 @@ impl TaskControlBlock {
     /// get the user token
     pub fn get_user_token(&self) -> usize {
         self.memory_set.token()
+    }
+    /// get the pagetable
+    pub fn get_pagetable(&self) -> usize {
+        let ptr: *mut PageTableWith<[PageTableEntryX64; 512], PageTableEntryX64> = &mut self.memory_set.page_table;
+        ptr as usize
     }
     /// Based on the elf info in program, build the contents of task in a new address space
     pub fn new(elf_data: &[u8], app_id: usize) -> Self {
