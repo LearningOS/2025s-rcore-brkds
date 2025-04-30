@@ -17,6 +17,7 @@ mod task;
 use crate::loader::{get_app_data, get_num_app};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
+use crate::mm::MemorySet;
 use alloc::vec::Vec;
 use lazy_static::*;
 use switch::__switch;
@@ -208,7 +209,9 @@ pub fn current_task_id() -> usize {
     TASK_MANAGER.inner.exclusive_access().current_task
 }
 
-/// Get the current 'Running' task's pagetable
-pub fn current_pagetable() -> usize {
-    TASK_MANAGER.inner.exclusive_access().tasks[current_task_id()].get_pagetable()
+/// Get the current 'Running' task's memory set
+pub fn current_memory_set() -> * mut MemorySet {
+    let id = current_task_id();
+    let s = & mut TASK_MANAGER.inner.exclusive_access().tasks[id].memory_set;
+    s as *mut MemorySet
 }

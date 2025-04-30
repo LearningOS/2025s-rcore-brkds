@@ -35,7 +35,7 @@ lazy_static! {
 }
 /// address space
 pub struct MemorySet {
-    pub page_table: PageTable,
+    page_table: PageTable,
     areas: Vec<MapArea>,
 }
 
@@ -54,6 +54,24 @@ impl MemorySet {
     /// Get the root page table
     pub fn root_ppn(&self) -> PhysPageNum {
         self.page_table.root_ppn()
+    }
+    /// map the page table directly
+    pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) ->usize{
+        let pte = self.page_table.find_pte_create(vpn).unwrap();
+        if pte.is_valid() {
+            return 0;
+        }
+        self.page_table.map(vpn, ppn, flags);
+        return 1;
+    }
+    /// unmap the page table directly
+    pub fn unmap(&mut self, vpn: VirtPageNum) ->usize{
+        let pte = self.page_table.find_pte_create(vpn).unwrap();
+        if pte.is_valid() {
+            self.page_table.unmap(vpn);
+            return 1;
+        }
+        return 0;
     }
     /// Assume that no conflicts.
     pub fn insert_framed_area(

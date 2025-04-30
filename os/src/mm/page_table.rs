@@ -100,7 +100,7 @@ impl PageTable {
         }
     }
     /// Find PageTableEntry by VirtPageNum, create a frame for a 4KB page table if not exist
-    fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
+    pub fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
         let idxs = vpn.indexes();
         let mut ppn = self.root_ppn;
         let mut result: Option<&mut PageTableEntry> = None;
@@ -141,10 +141,10 @@ impl PageTable {
     #[allow(unused)]
     pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) {
         let pte = self.find_pte_create(vpn).unwrap();
-         println!("PTE before mapping (VPN: {:?}): {:?}", vpn, (*pte).flags());
+        // println!("PTE before mapping (VPN: {:?}): {:?}", vpn, (*pte).flags());
         assert!(!pte.is_valid(), "vpn {:?} is mapped before mapping", vpn);
         *pte = PageTableEntry::new(ppn, flags | PTEFlags::V);
-         println!("PTE after mapping (VPN: {:?}): {:?}", vpn, (*pte).flags());
+         //println!("PTE after mapping (VPN: {:?}): {:?}", vpn, (*pte).flags());
     }
     /// remove the map between virtual page number and physical page number
     #[allow(unused)]
