@@ -1,5 +1,7 @@
 //! Implementation of [`PageTableEntry`] and [`PageTable`].
 
+use crate::config::PAGE_SIZE;
+
 use super::{frame_alloc, FrameTracker, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
 use alloc::vec;
 use alloc::vec::Vec;
@@ -197,7 +199,8 @@ pub fn copy_to_user<T>(token: usize,user_ptr: *mut T,data: &T,) -> isize{
             core::mem::size_of::<T>()
         )
     };
-    
+    if ((user_ptr as usize) & 0xffff_8000_0000_0000) != 0||!check_user_range(token, user_ptr as usize, data_bytes.len(), PTEFlags::R | PTEFlags::W | PTEFlags::U)
+    {   return -1; }
     let user_slices = translated_byte_buffer(
         token,
         user_ptr as *const u8,
@@ -219,44 +222,63 @@ pub fn copy_to_user<T>(token: usize,user_ptr: *mut T,data: &T,) -> isize{
 }
 
 /// read from user
-pub fn read_user<T: Default + Copy>(token: usize, ptr: *const T) -> T {
-    let mut data = T::default();
-    let size = core::mem::size_of::<T>();
-    let mut remaining = size;
-    let mut current_ptr = ptr as *const u8 as usize;
+pub fn read_user<T: Copy>(token: usize, user_ptr: *const T) -> Result<T,isize> {
+    // 创建未初始化内存（使用完全限定路径）
+    let mut data = ::core::mem::MaybeUninit::<T>::uninit();
+    let data_bytes = unsafe {
+        ::core::slice::from_raw_parts_mut(
+            data.as_mut_ptr() as *mut u8,
+            ::core::mem::size_of::<T>()
+        )
+    };
+    println!("user_ptr is {:?}",user_ptr);
+    if  ((user_ptr as usize) & 0xffff_8000_0000_0000) != 0||!check_user_range(token, user_ptr as usize, data_bytes.len(), PTEFlags::R | PTEFlags::U)
+    {   println!("user_ptr is {:?}",user_ptr);return Err(-1); }
+    println!("--user_ptr is {:?}",user_ptr);
+    // 获取用户内存切片（假设 translated_byte_buffer 在当前crate根）
+    let user_slices = translated_byte_buffer(
+        token,
+        user_ptr as *const u8,
+        ::core::mem::size_of::<T>()
+    );
+    // 使用切片风格复制数据
+    let mut bytes_copied = 0;
+    for slice in user_slices {
+        let copy_len = slice.len().min(data_bytes.len() - bytes_copied);
+        data_bytes[bytes_copied..bytes_copied+copy_len]
+            .copy_from_slice(&slice[..copy_len]);
+        bytes_copied += copy_len;
+    }
+    
+    unsafe { Ok(data.assume_init()) }
+}
 
-    while remaining > 0 {
-        // 计算当前页的剩余空间
-        let page_offset = current_ptr % PAGE_SIZE;
-        let chunk_size = (PAGE_SIZE - page_offset).min(remaining);
-        
-        // 获取用户内存切片（自动处理跨页）
-        let user_slices = translated_byte_buffer(
-            token,
-            current_ptr as *const u8,
-            chunk_size
-        );
 
-        // 必须成功拷贝当前chunk的所有数据
-        let mut copied = 0;
-        for slice in user_slices {
-            let copy_len = slice.len().min(chunk_size - copied);
-            assert!(copy_len > 0, "Empty slice in translated buffer");
-            
-            unsafe {
-                core::ptr::copy_nonoverlapping(
-                    slice.as_ptr(),
-                    (&mut data as *mut T as *mut u8).add(size - remaining + copied),
-                    copy_len
-                );
+
+/// 检查虚拟地址范围是否可读、可写并对用户有效
+pub fn check_user_range(token: usize, start: usize, len: usize, flags: PTEFlags) -> bool {
+    let page_table = PageTable::from_token(token);
+    let mut current = VirtAddr(start).floor();
+    let end = (start + len-1)/PAGE_SIZE+1;
+    let rlen:usize = end-start/PAGE_SIZE;
+    println!("1current is {:?} {}",current,rlen);
+    for _i in 0..rlen {
+        if let Some(pte) = page_table.translate(current) {
+            // 检查 PTE 是否满足指定的权限
+             println!("PTE-------------- (VPN: {:?}): {:?}", current, pte.flags());
+            if !pte.is_valid() || (pte.flags() & flags) != flags {
+                return false; // 不满足权限
             }
-            copied += copy_len;
+        } else {
+            println!("VPN {:?} is not mapped", current);
+            return false; // 地址未映射
         }
-        assert_eq!(copied, chunk_size, "Failed to copy full chunk");
-
-        current_ptr += chunk_size;
-        remaining -= chunk_size;
+        current.step();
+        println!("current is {:?}",current);
+        
     }
 
-    data
+    true
 }
+
+

@@ -46,13 +46,20 @@ pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
     match  _trace_request {
         0 => {
             // syscall trace
-            read_user(current_user_token(), _id as * mut isize)
+            match read_user(current_user_token(), _id as * mut u8){
+                Ok(data) => {
+                    data as isize
+    
+                }
+                Err(_) => {
+                    -1
+                }
+            }
             
         }
         1 => {
             // task trace
-            copy_to_user(current_user_token(),_id as * mut u8,&(_data as u8));
-            0
+            copy_to_user(current_user_token(),_id as * mut u8,&(_data as u8))
         }
         2 => {
             unsafe { (*get_task_syscall_counts())[syscall_map(_id)] as isize}
