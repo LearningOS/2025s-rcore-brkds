@@ -101,6 +101,7 @@ impl TaskManager {
     fn mark_current_exited(&self) {
         let mut inner = self.inner.exclusive_access();
         let cur = inner.current_task;
+        inner.tasks[cur].syscall_counts.fill(0);
         inner.tasks[cur].task_status = TaskStatus::Exited;
     }
 
@@ -215,3 +216,9 @@ pub fn current_memory_set() -> * mut MemorySet {
     let s = & mut TASK_MANAGER.inner.exclusive_access().tasks[id].memory_set;
     s as *mut MemorySet
 }
+
+/// Get the current task syscall_counts
+pub fn get_task_syscall_counts() -> * mut [usize;8]{
+    let current = current_task_id();
+    & mut TASK_MANAGER.inner.exclusive_access().tasks[current].syscall_counts as * mut [usize;8]
+} 

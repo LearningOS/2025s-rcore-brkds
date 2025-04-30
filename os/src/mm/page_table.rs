@@ -189,3 +189,74 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
     }
     v
 }
+/// Copy data from kernel space to user space
+pub fn copy_to_user<T>(token: usize,user_ptr: *mut T,data: &T,) -> isize{
+    let data_bytes = unsafe {
+        core::slice::from_raw_parts(
+            data as *const T as *const u8,
+            core::mem::size_of::<T>()
+        )
+    };
+    
+    let user_slices = translated_byte_buffer(
+        token,
+        user_ptr as *const u8,
+        data_bytes.len()
+    );
+    
+    let mut bytes_copied = 0;
+    for slice in user_slices {
+        let copy_len = slice.len().min(data_bytes.len() - bytes_copied);
+        slice[..copy_len].copy_from_slice(&data_bytes[bytes_copied..bytes_copied+copy_len]);
+        bytes_copied += copy_len;
+    }
+    
+    if bytes_copied == data_bytes.len() {
+        0
+    } else {
+        -1
+    }
+}
+
+/// read from user
+pub fn read_user<T: Default + Copy>(token: usize, ptr: *const T) -> T {
+    let mut data = T::default();
+    let size = core::mem::size_of::<T>();
+    let mut remaining = size;
+    let mut current_ptr = ptr as *const u8 as usize;
+
+    while remaining > 0 {
+        // 计算当前页的剩余空间
+        let page_offset = current_ptr % PAGE_SIZE;
+        let chunk_size = (PAGE_SIZE - page_offset).min(remaining);
+        
+        // 获取用户内存切片（自动处理跨页）
+        let user_slices = translated_byte_buffer(
+            token,
+            current_ptr as *const u8,
+            chunk_size
+        );
+
+        // 必须成功拷贝当前chunk的所有数据
+        let mut copied = 0;
+        for slice in user_slices {
+            let copy_len = slice.len().min(chunk_size - copied);
+            assert!(copy_len > 0, "Empty slice in translated buffer");
+            
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    slice.as_ptr(),
+                    (&mut data as *mut T as *mut u8).add(size - remaining + copied),
+                    copy_len
+                );
+            }
+            copied += copy_len;
+        }
+        assert_eq!(copied, chunk_size, "Failed to copy full chunk");
+
+        current_ptr += chunk_size;
+        remaining -= chunk_size;
+    }
+
+    data
+}

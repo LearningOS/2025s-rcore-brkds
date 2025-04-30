@@ -30,9 +30,10 @@ mod process;
 
 use fs::*;
 use process::*;
-
+use crate::task::get_task_syscall_counts;
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
+    unsafe {(*get_task_syscall_counts())[syscall_map(syscall_id)] += 1};
     match syscall_id {
         SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),
         SYSCALL_EXIT => sys_exit(args[0] as i32),
@@ -43,5 +44,19 @@ pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
         SYSCALL_MUNMAP => sys_munmap(args[0], args[1]),
         SYSCALL_SBRK => sys_sbrk(args[0] as i32),
         _ => panic!("Unsupported syscall_id: {}", syscall_id),
+    }
+}
+/// just map syscall id to syscall number
+pub fn syscall_map(num: usize) -> usize {
+    match num {
+        SYSCALL_WRITE => 0,
+        SYSCALL_EXIT => 1,
+        SYSCALL_YIELD => 2,
+        SYSCALL_GET_TIME => 3,
+        SYSCALL_SBRK => 4,
+        SYSCALL_MUNMAP => 5,
+        SYSCALL_MMAP => 6,
+        SYSCALL_TRACE => 7,
+        _ => 8,
     }
 }
