@@ -265,16 +265,16 @@ pub fn check_user_range(token: usize, start: usize, len: usize, flags: PTEFlags)
     for _i in 0..rlen {
         if let Some(pte) = page_table.translate(current) {
             // 检查 PTE 是否满足指定的权限
-             println!("PTE-------------- (VPN: {:?}): {:?}", current, pte.flags());
+            //  println!("PTE-------------- (VPN: {:?}): {:?}", current, pte.flags());
             if !pte.is_valid() || (pte.flags() & flags) != flags {
                 return false; // 不满足权限
             }
         } else {
-            println!("VPN {:?} is not mapped", current);
+            // println!("VPN {:?} is not mapped", current);
             return false; // 地址未映射
         }
         current.step();
-        println!("current is {:?}",current);
+        // println!("current is {:?}",current);
         
     }
 
