@@ -4,17 +4,25 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
-
+use crate::config::PAGE_SIZE;
 bitflags! {
     /// page table entry flags
     pub struct PTEFlags: u8 {
+        /// Valid
         const V = 1 << 0;
+        /// Readable
         const R = 1 << 1;
+        /// Writable
         const W = 1 << 2;
+        /// eXecutable
         const X = 1 << 3;
+        /// User
         const U = 1 << 4;
+        /// Global
         const G = 1 << 5;
+        /// Accessed
         const A = 1 << 6;
+        /// Dirty
         const D = 1 << 7;
     }
 }
@@ -88,7 +96,7 @@ impl PageTable {
         }
     }
     /// Find PageTableEntry by VirtPageNum, create a frame for a 4KB page table if not exist
-    fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
+    pub fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
         let idxs = vpn.indexes();
         let mut ppn = self.root_ppn;
         let mut result: Option<&mut PageTableEntry> = None;
@@ -212,4 +220,94 @@ pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
         .translate_va(VirtAddr::from(va))
         .unwrap()
         .get_mut()
+}
+
+/// Copy data from kernel space to user space
+pub fn copy_to_user<T>(token: usize,user_ptr: *mut T,data: &T,) -> isize{
+    let data_bytes = unsafe {
+        core::slice::from_raw_parts(
+            data as *const T as *const u8,
+            core::mem::size_of::<T>()
+        )
+    };
+    if ((user_ptr as usize) & 0xffff_8000_0000_0000) != 0||!check_user_range(token, user_ptr as usize, data_bytes.len(), PTEFlags::R | PTEFlags::W | PTEFlags::U)
+    {   return -1; }
+    let user_slices = translated_byte_buffer(
+        token,
+        user_ptr as *const u8,
+        data_bytes.len()
+    );
+    
+    let mut bytes_copied = 0;
+    for slice in user_slices {
+        let copy_len = slice.len().min(data_bytes.len() - bytes_copied);
+        slice[..copy_len].copy_from_slice(&data_bytes[bytes_copied..bytes_copied+copy_len]);
+        bytes_copied += copy_len;
+    }
+    
+    if bytes_copied == data_bytes.len() {
+        0
+    } else {
+        -1
+    }
+}
+
+/// read from user
+pub fn read_user<T: Copy>(token: usize, user_ptr: *const T) -> Result<T,isize> {
+    // 创建未初始化内存（使用完全限定路径）
+    let mut data = ::core::mem::MaybeUninit::<T>::uninit();
+    let data_bytes = unsafe {
+        ::core::slice::from_raw_parts_mut(
+            data.as_mut_ptr() as *mut u8,
+            ::core::mem::size_of::<T>()
+        )
+    };
+    println!("user_ptr is {:?}",user_ptr);
+    if  ((user_ptr as usize) & 0xffff_8000_0000_0000) != 0||!check_user_range(token, user_ptr as usize, data_bytes.len(), PTEFlags::R | PTEFlags::U)
+    {   println!("user_ptr is {:?}",user_ptr);return Err(-1); }
+    println!("--user_ptr is {:?}",user_ptr);
+    // 获取用户内存切片（假设 translated_byte_buffer 在当前crate根）
+    let user_slices = translated_byte_buffer(
+        token,
+        user_ptr as *const u8,
+        ::core::mem::size_of::<T>()
+    );
+    // 使用切片风格复制数据
+    let mut bytes_copied = 0;
+    for slice in user_slices {
+        let copy_len = slice.len().min(data_bytes.len() - bytes_copied);
+        data_bytes[bytes_copied..bytes_copied+copy_len]
+            .copy_from_slice(&slice[..copy_len]);
+        bytes_copied += copy_len;
+    }
+    
+    unsafe { Ok(data.assume_init()) }
+}
+
+
+
+/// 检查虚拟地址范围是否可读、可写并对用户有效
+pub fn check_user_range(token: usize, start: usize, len: usize, flags: PTEFlags) -> bool {
+    let page_table = PageTable::from_token(token);
+    let mut current = VirtAddr(start).floor();
+    let end = (start + len-1)/PAGE_SIZE+1;
+    let rlen:usize = end-start/PAGE_SIZE;
+    // println!("1current is {:?} {}",current,rlen);
+    for _i in 0..rlen {
+        if let Some(pte) = page_table.translate(current) {
+            // 检查 PTE 是否满足指定的权限
+            //  println!("PTE-------------- (VPN: {:?}): {:?}", current, pte.flags());
+            if !pte.is_valid() || (pte.flags() & flags) != flags {
+                return false; // 不满足权限
+            }
+        } else {
+            // println!("VPN {:?} is not mapped", current);
+            return false; // 地址未映射
+        }
+        current.step();
+        // println!("current is {:?}",current);
+        
+    }
+
+    true
 }

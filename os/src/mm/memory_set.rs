@@ -82,6 +82,24 @@ impl MemorySet {
         }
         self.areas.push(map_area);
     }
+     /// map the page table directly
+     pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) ->usize{
+        let pte = self.page_table.find_pte_create(vpn).unwrap();
+        if pte.is_valid() {
+            return 0;
+        }
+        self.page_table.map(vpn, ppn, flags);
+        return 1;
+    }
+    /// unmap the page table directly
+    pub fn unmap(&mut self, vpn: VirtPageNum) ->usize{
+        let pte = self.page_table.find_pte_create(vpn).unwrap();
+        if pte.is_valid() {
+            self.page_table.unmap(vpn);
+            return 1;
+        }
+        return 0;
+    }
     /// Mention that trampoline is not collected by areas.
     fn map_trampoline(&mut self) {
         self.page_table.map(

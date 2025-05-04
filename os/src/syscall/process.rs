@@ -1,14 +1,15 @@
 //! Process management syscalls
 use alloc::sync::Arc;
-
 use crate::{
     loader::get_app_data_by_name,
-    mm::{translated_refmut, translated_str},
+    mm::{copy_to_user, translated_refmut, translated_str, MemorySet,VirtAddr,PTEFlags,frame_alloc,StepByOne},
     task::{
         add_task, current_task, current_user_token, exit_current_and_run_next,
         suspend_current_and_run_next,
     },
+    timer::get_time_us,
 };
+use crate::config::PAGE_SIZE;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -70,13 +71,15 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
     trace!("kernel::pid[{}] sys_waitpid [{}]", current_task().unwrap().pid.0, pid);
     let task = current_task().unwrap();
     // find a child process
-
     // ---- access current PCB exclusively
     let mut inner = task.inner_exclusive_access();
+    // println!("kernel::pid[{}] sys_waitpid [{}],child.len is [{}]", task.pid.0, pid,inner.children.len());
     if !inner
         .children
         .iter()
-        .any(|p| pid == -1 || pid as usize == p.getpid())
+        .any(|p|  { 
+            // println!("\n p.getpid {}",p.getpid());
+            pid == -1 || pid as usize == p.getpid()})
     {
         return -1;
         // ---- release current PCB
@@ -110,7 +113,12 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
         "kernel:pid[{}] sys_get_time NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let us = get_time_us(); // 获取当前微秒数
+    let ts = TimeVal {
+        sec: us / 1_000_000,
+        usec: us % 1_000_000,
+    };
+    copy_to_user(current_user_token(), _ts, &ts)
 }
 
 /// YOUR JOB: Implement mmap.
@@ -119,7 +127,27 @@ pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
         "kernel:pid[{}] sys_mmap NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let task = current_task().unwrap();
+    let mut inner = task.inner_exclusive_access();
+    let pt = & mut inner.memory_set as * mut  MemorySet;
+    drop(inner);
+    let mut start = VirtAddr(_start).floor();
+    if _len == 0|| _port==0 ||  VirtAddr(_start).page_offset()!=0 || _port>7{
+        return -1;
+    }
+    let end = (_start+_len-1)/PAGE_SIZE+1;
+    let len:usize = end-_start/PAGE_SIZE;
+    for _i in 0..len {
+        let ft = frame_alloc().unwrap();
+        let ppn = ft.ppn;
+        let re = unsafe{(*pt).map(start, ppn, PTEFlags::from_bits((_port<<1) as u8 ).unwrap()|PTEFlags::U)};
+        if re == 0 {
+            return -1;
+        }
+        println!("start is {:?}, ft is {:?}",start,ft);
+        start.step();
+    }
+    0
 }
 
 /// YOUR JOB: Implement munmap.
@@ -128,7 +156,25 @@ pub fn sys_munmap(_start: usize, _len: usize) -> isize {
         "kernel:pid[{}] sys_munmap NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let task = current_task().unwrap();
+    let mut inner = task.inner_exclusive_access();
+    let pt = & mut inner.memory_set as * mut  MemorySet;
+    drop(inner);
+    let mut start = VirtAddr(_start).floor();
+    if _len == 0 ||  VirtAddr(_start).page_offset()!=0 {
+        return -1;
+    }
+    let end = (_start+_len-1)/PAGE_SIZE+1;
+    let len:usize = end-_start/PAGE_SIZE;
+    for _i in 0..len {
+        let re = unsafe{(*pt).unmap(start)};
+        if re == 0 {
+            return -1;
+        }
+        println!("start is {:?}",start);
+        start.step();
+    }
+    0
 }
 
 /// change data segment size
@@ -148,7 +194,18 @@ pub fn sys_spawn(_path: *const u8) -> isize {
         "kernel:pid[{}] sys_spawn NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let token = current_user_token();
+    let path = translated_str(token, _path);
+    if let Some(data) = get_app_data_by_name(path.as_str()) {
+        let task = current_task().unwrap();
+        let newtask = task.spawn(data);
+        let new_id = newtask.getpid();
+        add_task(newtask);
+        new_id as isize
+        
+    } else {
+        -1
+    }
 }
 
 // YOUR JOB: Set task priority.
@@ -157,5 +214,8 @@ pub fn sys_set_priority(_prio: isize) -> isize {
         "kernel:pid[{}] sys_set_priority NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    if _prio <2 {-1}
+    else {
+        _prio
+    }
 }
