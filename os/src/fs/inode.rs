@@ -13,7 +13,7 @@ use alloc::vec::Vec;
 use bitflags::*;
 use easy_fs::{EasyFileSystem, Inode};
 use lazy_static::*;
-
+use alloc::string::String;
 /// inode in memory
 /// A wrapper around a filesystem inode
 /// to implement File trait atop
@@ -21,6 +21,7 @@ pub struct OSInode {
     readable: bool,
     writable: bool,
     inner: UPSafeCell<OSInodeInner>,
+    name: String,
 }
 /// The OS inode inner in 'UPSafeCell'
 pub struct OSInodeInner {
@@ -30,11 +31,12 @@ pub struct OSInodeInner {
 
 impl OSInode {
     /// create a new inode in memory
-    pub fn new(readable: bool, writable: bool, inode: Arc<Inode>) -> Self {
+    pub fn new(readable: bool, writable: bool, inode: Arc<Inode>,name: &str) -> Self {
         Self {
             readable,
             writable,
             inner: unsafe { UPSafeCell::new(OSInodeInner { offset: 0, inode }) },
+            name: String::from(name),
         }
     }
     /// read all data from the inode
@@ -108,23 +110,34 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
         if let Some(inode) = ROOT_INODE.find(name) {
             // clear size
             inode.clear();
-            Some(Arc::new(OSInode::new(readable, writable, inode)))
+            Some(Arc::new(OSInode::new(readable, writable, inode,name)))
         } else {
             // create file
             ROOT_INODE
                 .create(name)
-                .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
+                .map(|inode| Arc::new(OSInode::new(readable, writable, inode,name)))
         }
     } else {
         ROOT_INODE.find(name).map(|inode| {
             if flags.contains(OpenFlags::TRUNC) {
                 inode.clear();
             }
-            Arc::new(OSInode::new(readable, writable, inode))
+            Arc::new(OSInode::new(readable, writable, inode,name))
         })
     }
 }
-
+///link a file
+pub fn write_dir(old_name: &str, new_name: &str) {
+        ROOT_INODE.linkat(old_name, new_name);
+}
+/// unlink a file
+pub fn unlink_file(name: &str) {
+    ROOT_INODE.unlinkat(name);
+}
+/// counts of links
+pub fn count(name: &str) -> usize {
+    ROOT_INODE.count(name)
+}
 impl File for OSInode {
     fn readable(&self) -> bool {
         self.readable
@@ -155,5 +168,14 @@ impl File for OSInode {
             total_write_size += write_size;
         }
         total_write_size
+    }
+    fn stat(&self) -> super::Stat {
+        super::Stat {
+            dev: 0,
+            ino: ROOT_INODE.inode_num(self.name.as_str()),
+            mode: super::StatMode::FILE,
+            nlink: ROOT_INODE.count(&self.name) as u32 ,
+            pad: [0; 7],
+        }
     }
 }

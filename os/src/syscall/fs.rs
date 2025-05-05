@@ -1,7 +1,8 @@
 //! File and filesystem-related syscalls
-use crate::fs::{open_file, OpenFlags, Stat};
-use crate::mm::{translated_byte_buffer, translated_str, UserBuffer};
+use crate::fs::{ list_apps, open_file, unlink_file, write_dir, OpenFlags, Stat};
+use crate::mm::{translated_byte_buffer, translated_str, UserBuffer,translated_refmut};
 use crate::task::{current_task, current_user_token};
+// use alloc::string::String;
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     trace!("kernel:pid[{}] sys_write", current_task().unwrap().pid.0);
@@ -81,7 +82,25 @@ pub fn sys_fstat(_fd: usize, _st: *mut Stat) -> isize {
         "kernel:pid[{}] sys_fstat NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let st = translated_refmut(current_user_token(), _st);
+    let task = current_task().unwrap();
+    let inner = task.inner_exclusive_access();
+    if _fd >= inner.fd_table.len() {
+        return -1;
+    }
+    if inner.fd_table[_fd].is_none() {
+        return -1;
+    }
+    if let Some(fd) = &inner.fd_table[_fd] {
+        let fd = fd.clone();
+        drop(inner);
+        let inode = fd.stat();
+        st.dev = inode.dev;
+        st.ino = inode.ino;
+        st.mode = inode.mode;
+        st.nlink = inode.nlink;
+0}
+    else{-1}
 }
 
 /// YOUR JOB: Implement linkat.
@@ -90,7 +109,13 @@ pub fn sys_linkat(_old_name: *const u8, _new_name: *const u8) -> isize {
         "kernel:pid[{}] sys_linkat NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let old_name = translated_str(current_user_token(), _old_name);
+    let new_name = translated_str(current_user_token(), _new_name);
+    // println!("-----------------");
+    list_apps();
+    write_dir(old_name.as_str(), new_name.as_str());
+    list_apps();
+    1
 }
 
 /// YOUR JOB: Implement unlinkat.
@@ -99,5 +124,7 @@ pub fn sys_unlinkat(_name: *const u8) -> isize {
         "kernel:pid[{}] sys_unlinkat NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let name = translated_str(current_user_token(), _name);
+    unlink_file(name.as_str());
+    0
 }

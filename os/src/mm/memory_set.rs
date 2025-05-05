@@ -96,6 +96,24 @@ impl MemorySet {
             PTEFlags::R | PTEFlags::X,
         );
     }
+    /// map the page table directly
+    pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) ->usize{
+        let pte = self.page_table.find_pte_create(vpn).unwrap();
+        if pte.is_valid() {
+            return 0;
+        }
+        self.page_table.map(vpn, ppn, flags);
+        return 1;
+    }
+    /// unmap the page table directly
+    pub fn unmap(&mut self, vpn: VirtPageNum) ->usize{
+        let pte = self.page_table.find_pte_create(vpn).unwrap();
+        if pte.is_valid() {
+            self.page_table.unmap(vpn);
+            return 1;
+        }
+        return 0;
+    }
     /// Without kernel stacks.
     pub fn new_kernel() -> Self {
         let mut memory_set = Self::new_bare();
