@@ -45,10 +45,20 @@ pub struct ProcessControlBlockInner {
     pub task_res_allocator: RecycleAllocator,
     /// mutex list
     pub mutex_list: Vec<Option<Arc<dyn Mutex>>>,
+    /// mutex matrix
+    pub mutex_matrix: Vec<Vec<Vec<i32>>>,
+    /// mutex available
+    pub mutex_available: Vec<i32>,
+    /// semaphore available
+    pub semaphore_available: Vec<i32>,
     /// semaphore list
     pub semaphore_list: Vec<Option<Arc<Semaphore>>>,
+    /// semaphore matrix
+    pub semaphore_matrix: Vec<Vec<Vec<i32>>>,
     /// condvar list
     pub condvar_list: Vec<Option<Arc<Condvar>>>,
+    /// detect deadlock
+    pub deadlock_detect: bool,
 }
 
 impl ProcessControlBlockInner {
@@ -81,6 +91,86 @@ impl ProcessControlBlockInner {
     /// get a task with tid in this process
     pub fn get_task(&self, tid: usize) -> Arc<TaskControlBlock> {
         self.tasks[tid].as_ref().unwrap().clone()
+    }
+    /// detect deadlock
+    pub fn deadlock_detect(&self) -> (bool, bool) {
+        let mut mutex_deadlock = false;
+    
+        let len = self.tasks.len();
+    
+        // ---------- Mutex 死锁检测 ----------
+        {
+            let need = self.mutex_matrix[1].clone();         // 资源需求
+            let hold = self.mutex_matrix[0].clone();         // 当前持有
+            let mut work = self.mutex_available.clone();     // 当前可用
+            let mut finish: Vec<bool> = vec![false; len]; 
+            let mut progress = true;
+            // println!("mwork: {:?} {}----------------------------------------------", work,self.mutex_list.len());
+            // println!("mhold: {:?}----------------------------------------------", hold);
+            // println!("mneed: {:?}----------------------------------------------", need);
+            // println!("mfinish: {:?}----------------------------------------------", finish);
+            while progress {
+                progress = false;
+                for i in 0..len {
+                    if finish[i] || self.tasks[i].is_none() {
+                        finish[i] = true;
+                        continue;
+                    }
+                    if need[i].iter().zip(work.iter()).all(|(n, w)| n <= w) {
+                        for j in 0..work.len() {
+                            work[j] += hold[i][j];
+                        }
+                        finish[i] = true;
+                        progress = true;
+                    }
+                }
+            }
+            if finish.iter().any(|&f| !f) {
+                mutex_deadlock = true;
+            }
+        }
+        let  mut semaphore_deadlock = false;
+        // ---------- Semaphore 死锁检测 ----------
+        {
+            let need = self.semaphore_matrix[1].clone();         // 资源需求
+            let mut hold = self.semaphore_matrix[0].clone();         // 当前持有
+            let mut work = self.semaphore_available.clone();     // 当前可用
+            let mut finish: Vec<bool> = vec![false; len]; 
+            let mut progress = true;
+            println!("work: {:?} {}----------------------------------------------", work,self.semaphore_list.len());
+            println!("hold: {:?}----------------------------------------------", hold);
+            println!("need: {:?}----------------------------------------------", need);
+            println!("finish: {:?}----------------------------------------------\n", finish);
+            while progress {
+                progress = false;
+                for i in 0..len {
+                    if finish[i] || self.tasks[i].is_none() {
+                        finish[i] = true;
+                        continue;
+                    }
+                    while hold[i].len()<work.len(){
+                        hold[i].push(0);
+                    }
+                    if need[i].iter().zip(work.iter()).all(|(n, w)| n <= w) {
+                        for j in 0..work.len() {
+                            work[j] += hold[i][j];
+                        }
+                        finish[i] = true;
+                        progress = true;
+                    }
+                }
+            }
+            println!("re work: {:?} {}----------------------------------------------", work,self.semaphore_list.len());
+            println!("hold: {:?}----------------------------------------------", hold);
+            println!("need: {:?}----------------------------------------------", need);
+            println!("finish: {:?}----------------------------------------------\n", finish);
+    
+            if finish.iter().any(|&f| !f) {
+                semaphore_deadlock = true;
+            }
+        }
+    
+        (mutex_deadlock, semaphore_deadlock)
     }
 }
 
@@ -119,6 +209,11 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    deadlock_detect: false,
+                    mutex_matrix: vec![vec![vec![0; 0]; 0]; 2],
+                    semaphore_matrix: vec![vec![vec![0; 0]; 0]; 2],
+                    mutex_available: vec![0; 0],
+                    semaphore_available: vec![0; 0],
                 })
             },
         });
@@ -245,6 +340,11 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    deadlock_detect: false,
+                    mutex_matrix: vec![vec![vec![0; 3]; 3]; 2],
+                    semaphore_matrix: vec![vec![vec![0; 3]; 3]; 2],
+                    mutex_available: vec![0; 0],
+                    semaphore_available: vec![0; 0],
                 })
             },
         });
